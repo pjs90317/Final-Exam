@@ -1,0 +1,149 @@
+---
+title: Econometrics B2000 Final Exam
+author: Patrick Sinclair
+output: github_document
+---
+```{r setup, include=FALSE}
+require(knitr)
+opts_knit$set(root.dir = "~/CCNY/Econometrics/Final Exam")
+library(dplyr)
+library(tidyverse)
+```
+```{r echo=FALSE}
+load("acs2017_ny_data.RData")
+```
+#### Question 1
+```{r Question 1}
+# 1a
+pnorm(1.65, 1, 6.5, lower.tail=TRUE)
+# 1b
+2*pnorm(13.67, 8, 2.7, lower.tail = FALSE)
+# 1c
+2*pnorm(-5.4, -11, 4, lower.tail = FALSE)
+# 1d
+qnorm((0.158/2), 14, 7.4)
+qnorm((0.158/2), 14, 7.4, lower.tail = FALSE)
+# 1e
+pt(6.56/4.1, 24, lower.tail = FALSE)
+# 1f
+pt(-0.24/0.4, 4, lower.tail= TRUE)
+```
+#### Question 2
+```{r Question 2}
+# Difference in Means
+dm <- 0.000145-(-0.0210)
+dm
+s1 <- 0.0213^2
+s2 <- 0.271^2
+Test_t <- dm/(sqrt((s1/289)+(s2/174)))
+#t-stat
+Test_t
+#p-value
+2*pt(Test_t, 173, lower.tail=FALSE)
+```
+There is not a statistically significant difference in the mean of average daily returns of crude oil.  
+#### Question 3
+```{r Question 3}
+p1 <- 90/10000
+p2 <- 15/10000
+pp <- 105/20000
+dp <- p1-p2
+z <- dp/sqrt((pp*(1-pp))*((1/10000)+(1/10000)))
+# z-score
+z
+# p-value
+pnorm(z, lower.tail=FALSE)
+```
+There is enough evidence at the 99% confidence level to reject the null hypothesis that p1 - p2 = 0.
+#### Question 4
+```{r Question 4}
+attach(acs2017_ny)
+use_varb <- (AGE >= 18) & (AGE <= 65)
+dat_use <- subset(acs2017_ny, use_varb)
+detach()
+```
+The subgroup I've selected is those between the ages of 18 and 65. I've selected this age range as it comprises recent high school graduates, looking to enter the work force, perhaps full time or part time to supplement college studies, those in prime working age and people on the cusp of retirement. Perhaps those at the upper end of the range are scaling back their working lives or have already retired.
+#### Question 5
+```{r Question 5}
+attach(dat_use)
+# Sample Stats
+mean(UHRSWORK) # overall mean UHRSWORK
+menavg <- mean(UHRSWORK[female == 0])
+menavg
+sdm <- sd(UHRSWORK[female == 0])
+mobs <- sum(female == 0)
+womenavg <- mean(UHRSWORK[female == 1])
+womenavg
+fobs <- sum(female == 1)
+sdf <- sd(UHRSWORK[female == 1])
+diffavg <- menavg-womenavg
+# Difference in Means
+tstat <- diffavg/(sqrt((sdm^2/mobs)+(sdf^2/fobs)))
+#t-stat
+tstat
+#p-value
+2*pt(tstat, 60433, lower.tail=FALSE)
+```
+There is a statistically significant difference in the average number of hours worked per week, between mean and women.
+```{r Other Relevant Simple Stats}
+# Men Average Wage
+mean(INCWAGE[female == 0])
+# Women Average Wage
+mean(INCWAGE[female == 1])
+# Average Family Size
+mean(FAMSIZE)
+# Number of Full Time Workers
+ftwork <- subset(dat_use, UHRSWORK >= 35)
+length(ftwork$UHRSWORK)
+# Number of Part Time Workers
+ptwork <- subset(dat_use, ((UHRSWORK > 0) & (UHRSWORK < 35)))
+length(ptwork$UHRSWORK)
+detach()
+```
+N.B., number of part time workers does not include those working 0 hours.  
+#### Question 6
+For the OLS estimation, I have selected Age, gender, education levels and family total income. They seem to meet the criteria of exogeneity though there may be some correlation between level of education and family total income. Including a polynomial in Age may not be as important, due to the limited scale of hours worked. Interactions may be a more useful tool to employ in this regression. I have left out the no high school education dummy variable, in order to see how increases in levels of education effect working hours.
+```{r Question 6}
+hrsOLS <- lm(UHRSWORK ~ AGE + female + educ_advdeg + educ_college + educ_hs + educ_somecoll + FTOTINC, data = dat_use)
+summary(hrsOLS)
+```
+The estimates do seem plausible. Age has a negative correlation with the hours worked, which may be explained by larger numbers of people retiring as they get older than young people who elect not to work while studying. Increased levels of education have an increasingly large positive correlation with hours worked. The gender variable indicates that the female condition has a negative correlation with hours worked. Total family income has a very small positive correlation. All of the statistics are significant, however the model has a small R^2 and is likely missing some key variables that would explain better the number of hours worked.
+```{r Question 6 Linear Hyopthesis}
+library(AER)
+linearHypothesis(hrsOLS, "educ_advdeg + educ_hs + educ_somecoll + educ_college = 0", test = "F")
+```
+```{r Question 6d}
+attach(dat_use)
+predNN <- length(UHRSWORK)
+set.seed(56473)
+pred_obs <- (runif(predNN) < 0.7)
+pred_set <-subset(dat_use, pred_obs)
+hrspredict <- data.frame((AGE >= 55) & (AGE <= 60),  female = 0, educ_advdeg = 1, educ_college = 0, educ_hs = 0, educ_somecoll = 0, (FTOTINC < 30000))
+hrspredict$yhat <- predict(hrsOLS, newdata = hrspredict)
+summary(hrspredict$yhat)
+hrspredvals <- subset(hrspredict$yhat, (AGE >= 55)&(female == 1))
+# Predicted values for Women over the age of 55.
+head(hrspredvals)
+```
+```{r Question 6e}
+pred_vals_OLS <- suppressWarnings(predict(hrsOLS, hrspredict))
+pred_model_OLS1 <- (pred_vals_OLS > 0.5)
+pred1OLStable <- table(pred = pred_model_OLS1, true = dat_use$UHRSWORK)
+pred1OLStable
+```
+#### Question 7
+For the logit model, I'm using a similar set of variables, excluding FTOTINCOME.
+
+The probabilities implied by the coefficient estimate patterns are similar to those in the OLS model.
+
+The linear hypothesis test returns a similary outcome - the education variables are still statistically significant.
+```{r Question 7 Logit}
+attach(dat_use)
+WorkFT <- (dat_use$UHRSWORK >= 35)
+hrslogit <- glm(WorkFT ~ AGE + female + educ_advdeg + educ_college + educ_hs + educ_somecoll, family = binomial)
+summary(hrslogit)
+linearHypothesis(hrslogit, "educ_advdeg + educ_hs + educ_somecoll + educ_college = 0", test = "F")
+```
+*All of the work on this exam is my own, answered honestly as rules state.*
+Name: Patrick Sinclair
+Date: 11/23/2020
